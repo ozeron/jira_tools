@@ -2,6 +2,11 @@ const jira = require('./jira.js');
 const program = require('commander');
 const { format, parseISO } = require('date-fns');
 
+const printCustomFields = require('./lib/customFieldsConfig.js')
+
+const START_DATE_FIELD = 'customfield_10015';
+const DATE_FORMAT_STRING = 'yyyy-MM-dd';
+
 let epicKey = 'MKT-210';
 // jira.issue.getIssue({ issueKey: epicKey }, function (error, issue) {
 //   console.log(issue);
@@ -46,18 +51,14 @@ async function fetchWorkStartedDate(issueKey) {
 
 
 
-async function editEpicDates(epicKey, newDueDate, newStartDate) {
+async function editEpicDates(epicKey, date, field) {
   try {
-    const issue = await jira.issue.getIssue({ issueKey: epicKey });
-    const updatedFields = {
-      duedate: format(parseISO(newDueDate), 'yyyy-MM-dd'), // Replace 'customfield_10000' with the actual field ID for the due date field
-      // customfield_10015: format(parseISO(newStartDate), 'yyyy-mm-dd'), // Replace 'customfield_10001' with the actual field ID for the start date field
-    };
-
-    updatedFields['customfield_10015'] = format(parseISO(newStartDate), 'yyyy-MM-dd');
+    const value = format(parseISO(date), DATE_FORMAT_STRING)
+    const updatedFields = {}
+    updatedFields[field] = value;
 
     const updatedIssue = await await jira.issue.editIssue({ issueKey: epicKey, issue: { fields: updatedFields } });
-    console.log('Epic due date and start date updated successfully.');
+    console.log(`Epic ${field} updated successfully to ${value}.`);
   } catch (error) {
     console.error('Error editing epic dates:', error);
   }
@@ -72,41 +73,38 @@ async function fetchEpicStatusAndDueDate(issueKey) {
     const issue = await jira.issue.getIssue({ issueKey });
     const status = issue.fields.status.name;
     const dueDate = issue.fields.duedate;
+    const startDate = issue.fields[START_DATE_FIELD];
 
     // console.log(`Status of ${issueKey}: ${status}`);
     // console.log(`Due date of ${issueKey}: ${dueDate}`);
 
-    return { status, dueDate };
+    return { status, dueDate, startDate };
   } catch (error) {
     console.error('Error fetching issue status and due date:', error);
   }
 }
 
-
-
-
 async function fetchLinkedIssues(epicKey, options) {
   try {
 
-    const { status, dueDate } = await fetchEpicStatusAndDueDate(epicKey)
-    if (!options.force && dueDate) {
-      console.log('Due date is already set. No changes will be applied.')
-      return;
-    }
+    const { status, dueDate, startDate } = await fetchEpicStatusAndDueDate(epicKey)
+    console.log(`Epic: ${epicKey} | ${status}`);
+    console.log(`Dates: ${startDate ? startDate : 'not set'} => ${dueDate ? dueDate : 'not set'}`);
+
     if (!options.force && status == "Done") {
-      console.log('Status is already "Done". No changes will be applied.')
+      console.log('Status is already "Done". No changes will be applied. Pass -f to overwrite')
       return;
     }
     let response = await jira.search.search({ jql: `"Epic Link" = ${epicKey} AND resolution = Done ORDER BY resolutiondate ASC` });
     const issues = response.issues.filter(issue => issue !== undefined);
-    // console.log('Found issues', issues.length)
+    console.log('Issues Count: ', issues.length)
     if (issues.length == 0) {
-      console.log('There are no linked issues')
+      console.log('Skipping as there are no linked issues')
       return;
     }
     if (issues[0].fields.status.name != 'Done') {
       // console.log(issues[0].status, issues[0].key)
-      console.log('First issue not done')
+      console.log('Skipping because first issue not done')
       // console.log(JSON.stringify(issues[0]))
       return;
     }
@@ -116,15 +114,29 @@ async function fetchLinkedIssues(epicKey, options) {
     if (!workStartedAt) {
       throw new Error('workStartedAt is empty or undefined');
     }
-    console.log('epicKey:', epicKey);
-    console.log('Min resolution date:', workStartedAt);
-    console.log('Max resolution date:', newDueDate);
-    if (options.write) {
-      console.log('applying changes');
-      await editEpicDates(epicKey, newDueDate, workStartedAt)
-    } else {
-      console.log('dry run, pass -w to overwrite')
+    console.log('Earliest linked issue start date:', format(parseISO(workStartedAt), DATE_FORMAT_STRING));
+    console.log('Oldest linked issue resolution date:', format(parseISO(newDueDate), DATE_FORMAT_STRING));
+
+    async function applyChanges(options, epicKey, date, field, forceMessage, errorMessage) {
+      if (!options.force && date) {
+        console.log(forceMessage);
+      } else {
+        if (parseISO(workStartedAt) > parseISO(newDueDate)) {
+          console.log(errorMessage);
+        } else {
+          await editEpicDates(epicKey, date, field);
+        }
+      }
     }
+
+    if (options.write) {
+      await applyChanges(options, epicKey, newDueDate, 'duedate', `Due Date is already set, pass -f to overwrite`, 'New start date is later than newDueDate, skipping...');
+      await applyChanges(options, epicKey, workStartedAt, START_DATE_FIELD, `Start Date is already set, pass -f to overwrite`, 'New start date is later than newDueDate, skipping...');
+    } else {
+      console.log('dry run, pass -w to overwrite');
+    }
+
+
   } catch (error) {
     console.error('Error fetching linked issues:', error);
   }
@@ -163,5 +175,11 @@ program
   .option('-w, --write', 'Update epic with due dates')
   .option('-f, --force', 'Overwrite values')
   .action((jql, cmdObj) => fetchAllEpicsAndProcessThem(jql, cmdObj));
+
+
+program
+  .command('print-custom-fields')
+  .action(printCustomFields)
+
 
 program.parse(process.argv);
