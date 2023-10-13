@@ -113,21 +113,21 @@ async function fetchLinkedIssues(epicKey, options) {
     console.log('Earliest linked issue start date:', format(parseISO(workStartedAt), DATE_FORMAT_STRING));
     console.log('Oldest linked issue resolution date:', format(parseISO(newDueDate), DATE_FORMAT_STRING));
 
-    async function applyChanges(options, epicKey, date, field, forceMessage, errorMessage) {
-      if (!options.force && date) {
+    async function applyChanges(options, epicKey, currentDate, newDate, field, forceMessage, errorMessage) {
+      if (!options.force && currentDate) {
         console.log(chalk.red(forceMessage));
       } else {
         if (parseISO(workStartedAt) > parseISO(newDueDate)) {
           console.log(errorMessage);
         } else {
-          await editEpicDates(epicKey, date, field);
+          await editEpicDates(epicKey, newDate, field);
         }
       }
     }
 
     if (options.write) {
-      await applyChanges(options, epicKey, newDueDate, 'duedate', `Due Date is already set, pass -f to overwrite`, 'New start date is later than newDueDate, skipping...');
-      await applyChanges(options, epicKey, workStartedAt, START_DATE_FIELD, `Start Date is already set, pass -f to overwrite`, 'New start date is later than newDueDate, skipping...');
+      await applyChanges(options, epicKey, dueDate, newDueDate, 'duedate', `Due Date is already set, pass -f to overwrite`, 'New start date is later than newDueDate, skipping...');
+      await applyChanges(options, epicKey, startDate, workStartedAt, START_DATE_FIELD, `Start Date is already set, pass -f to overwrite`, 'New start date is later than newDueDate, skipping...');
     } else {
       console.log(chalk.red('dry run, pass -w to overwrite'));
     }
