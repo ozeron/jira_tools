@@ -1,5 +1,6 @@
 const jira = require('./jira.js');
 const program = require('commander');
+const chalk = require('chalk');
 const { format, parseISO } = require('date-fns');
 
 const printCustomFields = require('./lib/customFieldsConfig.js')
@@ -58,9 +59,9 @@ async function editEpicDates(epicKey, date, field) {
     updatedFields[field] = value;
 
     const updatedIssue = await await jira.issue.editIssue({ issueKey: epicKey, issue: { fields: updatedFields } });
-    console.log(`Epic ${field} updated successfully to ${value}.`);
+    console.log(chalk.green(`Epic ${field} updated successfully to ${value}.`));
   } catch (error) {
-    console.error('Error editing epic dates:', error);
+    console.error(chalk.red('Error editing epic dates:', error));
   }
 }
 
@@ -88,8 +89,8 @@ async function fetchLinkedIssues(epicKey, options) {
   try {
 
     const { status, dueDate, startDate } = await fetchEpicStatusAndDueDate(epicKey)
-    console.log(`Epic: ${epicKey} | ${status}`);
-    console.log(`Dates: ${startDate ? startDate : 'not set'} => ${dueDate ? dueDate : 'not set'}`);
+    console.log(chalk.blue(`Epic: ${epicKey} | ${status}`));
+    console.log(chalk.blue(`Dates: ${startDate ? startDate : 'not set'} => ${dueDate ? dueDate : 'not set'}`));
 
     if (!options.force && status == "Done") {
       console.log('Status is already "Done". No changes will be applied. Pass -f to overwrite')
@@ -119,7 +120,7 @@ async function fetchLinkedIssues(epicKey, options) {
 
     async function applyChanges(options, epicKey, date, field, forceMessage, errorMessage) {
       if (!options.force && date) {
-        console.log(forceMessage);
+        console.log(chalk.red(forceMessage));
       } else {
         if (parseISO(workStartedAt) > parseISO(newDueDate)) {
           console.log(errorMessage);
@@ -133,7 +134,7 @@ async function fetchLinkedIssues(epicKey, options) {
       await applyChanges(options, epicKey, newDueDate, 'duedate', `Due Date is already set, pass -f to overwrite`, 'New start date is later than newDueDate, skipping...');
       await applyChanges(options, epicKey, workStartedAt, START_DATE_FIELD, `Start Date is already set, pass -f to overwrite`, 'New start date is later than newDueDate, skipping...');
     } else {
-      console.log('dry run, pass -w to overwrite');
+      console.log(chalk.red('dry run, pass -w to overwrite'));
     }
 
 
