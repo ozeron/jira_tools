@@ -5,13 +5,8 @@ const { format, parseISO } = require('date-fns');
 
 const printCustomFields = require('./lib/customFieldsConfig.js')
 
-const START_DATE_FIELD = 'customfield_10015';
+const START_DATE_FIELD = process.env.JIRA_START_DATE_FIELD || 'customfield_10015';
 const DATE_FORMAT_STRING = 'yyyy-MM-dd';
-
-let epicKey = 'MKT-210';
-// jira.issue.getIssue({ issueKey: epicKey }, function (error, issue) {
-//   console.log(issue);
-// });
 
 /**
  * Fetches the work started date for a given issue.
@@ -159,9 +154,6 @@ async function fetchAllEpicsAndProcessThem(jql, cmdObj) {
   }
 }
 
-
-// fetchAllEpicsAndProcessThem();
-// fetchLinkedIssues('MKT-214')
 program
   .command('process-epic <epicKey>')
   .description('Update start and due date of epic')
